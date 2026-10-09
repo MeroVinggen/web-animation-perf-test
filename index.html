@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Animation perf test</title>
+  <style>
+    :root {
+      --bg: #14161a;
+      --fg: #e8e6e1;
+      --muted: #8b8f98;
+      --panel: #1d2026;
+      --line: #2d323b;
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #f3f1ec;
+        --fg: #1b1d21;
+        --muted: #666b75;
+        --panel: #fff;
+        --line: #d9d6cf;
+      }
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #panel {
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .svg-icon {
+      height: 35px;
+      width: 35px;
+      transition: 350ms;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .rotate180 {
+      rotate: 180deg;
+    }
+
+    button,
+    input[type=number] {
+      font: inherit;
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 12px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid #7aa7f0;
+      outline-offset: 2px;
+    }
+
+    button.mode[aria-pressed="true"] {
+      color: #0c1210;
+      font-weight: 600;
+      border-color: transparent;
+      background: var(--c);
+    }
+
+    button.mode {
+      border-left: 4px solid var(--c);
+    }
+
+    input[type=number] {
+      width: 100px;
+    }
+
+    label.chk {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    #stage {
+      position: relative;
+      /* items are positioned relative to the stage, not the viewport */
+      flex-grow: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .it {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--c);
+      opacity: .75;
+      box-shadow: 0 0 6px 2px var(--sh);
+    }
+
+    #stage[data-mode="style"] {
+      --c: #5ec2a0;
+      --sh: rgba(94, 194, 160, .5);
+    }
+
+    #stage[data-mode="waapi"] {
+      --c: #b79af0;
+      --sh: rgba(183, 154, 240, .5);
+    }
+
+    #stage[data-mode="css"] {
+      --c: #7aa7f0;
+      --sh: rgba(122, 167, 240, .5);
+    }
+
+    #stage[data-mode="csspos"] {
+      --c: #4fc3d9;
+      --sh: rgba(79, 195, 217, .5);
+    }
+
+    #stage[data-mode="cssmargin"] {
+      --c: #d96fb0;
+      --sh: rgba(217, 111, 176, .5);
+    }
+
+    #bCssPos {
+      --c: #4fc3d9;
+    }
+
+    #bCssMargin {
+      --c: #d96fb0;
+    }
+
+    #stage[data-mode="pos"] {
+      --c: #e8c15a;
+      --sh: rgba(232, 193, 90, .5);
+    }
+
+    #stage[data-mode="marginfree"] {
+      --c: #f08a3c;
+      --sh: rgba(240, 138, 60, .5);
+    }
+
+    #stage[data-mode="margin"] {
+      --c: #ef6a5a;
+      --sh: rgba(239, 106, 90, .5);
+    }
+
+    #bStyle {
+      --c: #5ec2a0;
+    }
+
+    #bWaapi {
+      --c: #b79af0;
+    }
+
+    #bCss {
+      --c: #7aa7f0;
+    }
+
+    #bPos {
+      --c: #e8c15a;
+    }
+
+    #bMargin {
+      --c: #ef6a5a;
+    }
+
+    #bMarginFree {
+      --c: #f08a3c;
+    }
+
+    @keyframes mv {
+
+      0%,
+      100% {
+        translate: calc(var(--ampX) * 1px) 0;
+      }
+
+      25% {
+        translate: 0 calc(var(--ampY) * 1px);
+      }
+
+      50% {
+        translate: calc(var(--ampX) * -1px) 0;
+      }
+
+      75% {
+        translate: 0 calc(var(--ampY) * -1px);
+      }
+    }
+
+    @keyframes pc {
+      from {
+        scale: .4;
+      }
+
+      to {
+        scale: 1.6;
+      }
+    }
+
+    #stage[data-mode="css"] .it {
+      animation-name: mv, pc;
+      animation-duration: var(--d), var(--pd);
+      animation-delay: var(--dl), var(--pl);
+      animation-timing-function: ease-in-out, ease-in-out;
+      animation-iteration-count: infinite, infinite;
+      animation-direction: normal, alternate;
+    }
+
+    #stage.nomove .it {
+      animation-name: none, pc;
+    }
+
+    #stage.noscale .it {
+      animation-name: mv, none;
+    }
+
+    #stage.nomove.noscale .it {
+      animation-name: none, none;
+    }
+
+    #stage.paused .it {
+      animation-play-state: paused;
+    }
+
+    @keyframes mvpos {
+
+      0%,
+      100% {
+        left: calc((var(--x) + var(--ampX)) * 1px);
+        top: calc(var(--y) * 1px);
+      }
+
+      25% {
+        left: calc(var(--x) * 1px);
+        top: calc((var(--y) + var(--ampY)) * 1px);
+      }
+
+      50% {
+        left: calc((var(--x) - var(--ampX)) * 1px);
+        top: calc(var(--y) * 1px);
+      }
+
+      75% {
+        left: calc(var(--x) * 1px);
+        top: calc((var(--y) - var(--ampY)) * 1px);
+      }
+    }
+
+    @keyframes mvmar {
+
+      0%,
+      100% {
+        margin-left: calc((var(--x) + var(--ampX)) * 1px);
+        margin-top: calc(var(--y) * 1px);
+      }
+
+      25% {
+        margin-left: calc(var(--x) * 1px);
+        margin-top: calc((var(--y) + var(--ampY)) * 1px);
+      }
+
+      50% {
+        margin-left: calc((var(--x) - var(--ampX)) * 1px);
+        margin-top: calc(var(--y) * 1px);
+      }
+
+      75% {
+        margin-left: calc(var(--x) * 1px);
+        margin-top: calc((var(--y) - var(--ampY)) * 1px);
+      }
+    }
+
+    @keyframes szc {
+      from {
+        width: 9.6px;
+        height: 9.6px;
+      }
+
+      to {
+        width: 38.4px;
+        height: 38.4px;
+      }
+    }
+
+    #stage[data-mode="csspos"] .it,
+    #stage[data-mode="cssmargin"] .it {
+      animation-duration: var(--d), var(--pd);
+      animation-delay: var(--dl), var(--pl);
+      animation-timing-function: ease-in-out, ease-in-out;
+      animation-iteration-count: infinite, infinite;
+      animation-direction: normal, alternate;
+    }
+
+    #stage[data-mode="csspos"] .it {
+      animation-name: mvpos, szc;
+    }
+
+    #stage[data-mode="cssmargin"] .it {
+      animation-name: mvmar, szc;
+    }
+
+    /* move / scale checkboxes for the new modes */
+    #stage.nomove[data-mode="csspos"] .it,
+    #stage.nomove[data-mode="cssmargin"] .it {
+      animation-name: none, szc;
+    }
+
+    #stage.noscale[data-mode="csspos"] .it {
+      animation-name: mvpos, none;
+    }
+
+    #stage.noscale[data-mode="cssmargin"] .it {
+      animation-name: mvmar, none;
+    }
+
+    #stage.nomove.noscale[data-mode="csspos"] .it,
+    #stage.nomove.noscale[data-mode="cssmargin"] .it {
+      animation-name: none, none;
+    }
+
+    #stage.noshadow .it {
+      box-shadow: none;
+    }
+
+    #stage.noopacity .it {
+      opacity: 1;
+    }
+
+    .grow-1 {
+      flex-grow: 1;
+    }
+
+    input[type=checkbox] {
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <svg style="display: none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30">
+    <defs>
+      <g id="SVGRepo_iconCarrier">
+        <path d="M5 1v15M5 1l-4 4M5 1l4 4" stroke="#ffffff" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" />
+      </g>
+    </defs>
+  </svg>
+
+  <div id="panel">
+    <div class="group grow-1" id="modes">
+      <div class="group">
+        <button class="mode" id="bCss" data-m="css" aria-pressed="false">css-animate-transform</button>
+        <button class="mode" id="bCssPos" data-m="csspos" aria-pressed="false">css-animate-pos (left/top + w/h)</button>
+        <button class="mode" id="bCssMargin" data-m="cssmargin" aria-pressed="false">css-animate-margin (+ w/h)</button>
+      </div>
+      <div class="group">
+        <button class="mode" id="bWaapi" data-m="waapi" aria-pressed="false">js-animate-transform</button>
+        <button class="mode" id="bStyle" data-m="style" aria-pressed="true">js-style-transform</button>
+        <button class="mode" id="bPos" data-m="pos" aria-pressed="false">js-style-pos (left/top + w/h)</button>
+        <button class="mode" id="bMarginFree" data-m="marginfree" aria-pressed="false">js-style-margin (+ w/h)</button>
+        <button class="mode" id="bMargin" data-m="margin" aria-pressed="false">js-style-margin (+ w/h) + forced
+          reflow</button>
+      </div>
+    </div>
+    <div class="group">
+      <input type="number" id="count" min="1" max="200000" step="100" value="11" aria-label="Item count">
+      <button id="apply">Set items</button>
+      <button id="amountAdd50">+50</button>
+      <button id="amountSub50">-50</button>
+    </div>
+    <div class="group">
+      <label class="chk"><input type="checkbox" id="aMove" checked> move</label>
+      <label class="chk"><input type="checkbox" id="aScale" checked> scale</label>
+      <label class="chk"><input type="checkbox" id="aWill"> will-change</label>
+      <label class="chk"><input type="checkbox" id="aShadow" checked> shadow</label>
+      <label class="chk"><input type="checkbox" id="aOpacity" checked> opacity</label>
+      <button id="pause">Pause</button>
+      <svg id="panel-pos-icon" class="svg-icon">
+        <use href="#SVGRepo_iconCarrier" x="12" y="8" />
+      </svg>
+    </div>
+  </div>
+
+  <div id="stage" data-mode="style"></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const stage = $('stage');
+    const countInput = $('count');
+    const applyBtn = $('apply');
+    const addBtn = $('amountAdd50');
+    const subBtn = $('amountSub50');
+    const moveChk = $('aMove');
+    const scaleChk = $('aScale');
+    const willChk = $('aWill');
+    const shadowChk = $('aShadow');
+    const opacityChk = $('aOpacity');
+    const pauseBtn = $('pause');
+    const panel = $('panel');
+    const panelPosIcon = $('panel-pos-icon');
+    const modeBtns = Array.from(document.querySelectorAll('#modes button'));
+
+    const BASE = 24, half = BASE / 2, MAX = 200000;
+
+    // -------------------------------- state --------------------------------
+
+    let mode = 'style';
+    let doMove = moveChk.checked;
+    let doScale = scaleChk.checked;
+    let will = willChk.checked;
+    let paused = false;
+
+    const items = [];   // DOM elements, created once per item
+    const anims = [];   // anims[i] = array of Animation objects (waapi mode)
+
+    let W = stage.clientWidth;
+    let H = stage.clientHeight;
+    let cap = 0;
+    let baseX = new Float32Array(0);
+    let baseY = new Float32Array(0);
+    let ampX = new Float32Array(0);
+    let ampY = new Float32Array(0);
+    let speed = new Float32Array(0);
+    let phase = new Float32Array(0);
+    let reflowSink = 0;
+
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function ensureCap(n) {
+      if (n <= cap) return;
+      const newCap = Math.max(n, cap * 2, 256);
+      const grow = a => { const b = new Float32Array(newCap); b.set(a); return b; };
+      baseX = grow(baseX);
+      baseY = grow(baseY);
+      ampX = grow(ampX);
+      ampY = grow(ampY);
+      speed = grow(speed);
+      phase = grow(phase);
+      cap = newCap;
+    }
+
+    function initParams(i) {
+      // coordinates are relative to the stage
+      baseX[i] = rnd(40, Math.max(41, W - 40));
+      baseY[i] = rnd(40, Math.max(41, H - 40));
+      ampX[i] = rnd(10, 60);
+      ampY[i] = rnd(10, 60);
+      speed[i] = rnd(0.6, 2.2);
+      phase[i] = rnd(0, Math.PI * 2);
+    }
+
+    function cancelAnims(i) {
+      const list = anims[i];
+      if (list) {
+        for (const a of list) {
+          a.cancel();
+        }
+      }
+      anims[i] = [];
+    }
+
+    function styleItem(i) {
+      const el = items[i], s = el.style;
+      cancelAnims(i);
+      s.cssText = '';
+
+      let wc;
+
+      if (mode === 'style') {
+        wc = 'transform';
+      } else if (mode === 'css' || mode === 'waapi') {
+        wc = 'translate, scale';
+      } else if (mode === 'pos' || mode === 'csspos') {
+        wc = 'left, top, width, height';
+        // marginfree, margin, cssmargin
+      } else {
+        wc = 'margin-left, margin-top, width, height';
+      }
+      s.willChange = will ? wc : '';
+
+      if (mode === 'css' || mode === 'waapi') {
+        s.left = (baseX[i] - half).toFixed(1) + 'px';
+        s.top = (baseY[i] - half).toFixed(1) + 'px';
+      }
+
+      if (mode === 'css' || mode === 'csspos' || mode === 'cssmargin') {
+        s.setProperty('--x', (baseX[i] - half).toFixed(1));
+        s.setProperty('--y', (baseY[i] - half).toFixed(1));
+        if (mode === 'csspos') {
+          s.left = (baseX[i] - half).toFixed(1) + 'px';
+          s.top = (baseY[i] - half).toFixed(1) + 'px';
+        } else if (mode === 'cssmargin') {
+          s.marginLeft = (baseX[i] - half).toFixed(1) + 'px';
+          s.marginTop = (baseY[i] - half).toFixed(1) + 'px';
+        }
+        s.setProperty('--ampX', ampX[i].toFixed(1));
+        s.setProperty('--ampY', ampY[i].toFixed(1));
+        s.setProperty('--d', (Math.PI * 2 / speed[i]).toFixed(2) + 's');
+        s.setProperty('--dl', (-phase[i] / speed[i]).toFixed(2) + 's');
+        s.setProperty('--pd', (Math.PI / 2).toFixed(2) + 's');
+        s.setProperty('--pl', (-phase[i] / 2).toFixed(2) + 's');
+      } else if (mode === 'waapi') {
+        const list = anims[i];
+        if (doMove) {
+          const X = ampX[i].toFixed(1), Y = ampY[i].toFixed(1);
+          list.push(el.animate([
+            { translate: X + 'px 0px' },
+            { translate: '0px ' + Y + 'px' },
+            { translate: '-' + X + 'px 0px' },
+            { translate: '0px -' + Y + 'px' },
+            { translate: X + 'px 0px' }
+          ], {
+            duration: Math.PI * 2 / speed[i] * 1000, delay: -phase[i] / speed[i] * 1000,
+            iterations: Infinity, easing: 'ease-in-out'
+          }));
+        }
+        if (doScale) {
+          list.push(el.animate([{ scale: 0.4 }, { scale: 1.6 }], {
+            duration: Math.PI / 2 * 1000, delay: -phase[i] / 2 * 1000,
+            iterations: Infinity, direction: 'alternate', easing: 'ease-in-out'
+          }));
+        }
+        if (paused) for (const a of list) a.pause();
+      }
+    }
+
+    function syncFlags() {
+      stage.classList.toggle('nomove', !doMove);
+      stage.classList.toggle('noscale', !doScale);
+      stage.classList.toggle('paused', paused);
+      for (let i = 0; i < anims.length; i++) {
+        const list = anims[i];
+        for (let k = 0; k < list.length; k++) {
+          paused ? list[k].pause() : list[k].play();
+        }
+      }
+    }
+
+    function restyleAll() {
+      stage.dataset.mode = mode;
+      for (let i = 0; i < items.length; i++) styleItem(i);
+      syncFlags();
+    }
+
+    function setMode(m) {
+      mode = m;
+      for (const b of modeBtns) {
+        b.setAttribute('aria-pressed', b.dataset.m === m);
+      }
+      restyleAll();
+    }
+
+    function setCount(n) {
+      n = Math.max(1, Math.min(MAX, n | 0));
+      const cur = items.length;
+
+      if (n > cur) {
+        ensureCap(n);
+        const frag = document.createDocumentFragment();
+        for (let i = cur; i < n; i++) {
+          const d = document.createElement('div');
+          d.className = 'it';
+          items[i] = d;
+          anims[i] = [];
+          initParams(i);
+          frag.appendChild(d);
+        }
+        stage.appendChild(frag);
+        for (let i = cur; i < n; i++) styleItem(i);
+      } else if (n < cur) {
+        for (let i = n; i < cur; i++) {
+          cancelAnims(i);
+          items[i].remove();
+        }
+        items.length = n;
+        anims.length = n;
+      }
+
+      countInput.value = n;
+    }
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+
+      if (!paused && (mode === 'style' || mode === 'pos' || mode === 'margin' || mode === 'marginfree')) {
+        const t = now / 1000;
+        const n = items.length;
+
+        for (let i = 0; i < n; i++) {
+          let x = baseX[i], y = baseY[i], s = 1;
+          if (doMove) {
+            x += Math.sin(t * speed[i] + phase[i]) * ampX[i];
+            y += Math.cos(t * speed[i] * 1.3 + phase[i]) * ampY[i];
+          }
+          if (doScale) s = 1 + 0.6 * Math.sin(t * 2 + phase[i]);
+          const el = items[i], st = el.style;
+
+          if (mode === 'style') {
+            st.transform = 'translate(' + (x - half).toFixed(1) + 'px,' + (y - half).toFixed(1) +
+              'px) scale(' + s.toFixed(3) + ')';
+          } else {
+            const size = BASE * s;
+            if (mode === 'pos') {
+              st.left = (x - size / 2).toFixed(1) + 'px';
+              st.top = (y - size / 2).toFixed(1) + 'px';
+            } else {
+              st.marginLeft = (x - size / 2).toFixed(1) + 'px';
+              st.marginTop = (y - size / 2).toFixed(1) + 'px';
+            }
+            st.width = size.toFixed(1) + 'px';
+            st.height = size.toFixed(1) + 'px';
+            if (mode === 'margin') reflowSink += el.offsetWidth; // read after write → forced sync layout per item
+          }
+        }
+      }
+    }
+
+    // ------------------------------ controls -------------------------------
+
+    for (const b of modeBtns) b.onclick = () => setMode(b.dataset.m);
+    applyBtn.onclick = () => setCount(+countInput.value || 1);
+    countInput.addEventListener('keydown', e => { if (e.key === 'Enter') applyBtn.click(); });
+    addBtn.onclick = () => setCount(items.length + 50);
+    subBtn.onclick = () => setCount(items.length - 50);
+
+    panelPosIcon.onclick = () => {
+      panel.style.order = panelPosIcon.classList.toggle("rotate180") ? "1" : "unset";
+    };
+
+    willChk.onchange = () => { will = willChk.checked; restyleAll(); };
+    moveChk.onchange = () => { doMove = moveChk.checked; restyleAll(); };
+    scaleChk.onchange = () => { doScale = scaleChk.checked; restyleAll(); };
+    shadowChk.onchange = () => stage.classList.toggle('noshadow', !shadowChk.checked);
+    opacityChk.onchange = () => stage.classList.toggle('noopacity', !opacityChk.checked);
+    pauseBtn.onclick = () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      syncFlags();
+    };
+
+    // keep items inside the #stage on resize: rescale positions instead of re-randomizing
+    new ResizeObserver(() => {
+      const nW = stage.clientWidth, nH = stage.clientHeight;
+      if (nW === W && nH === H) return;
+      const kx = W ? nW / W : 1, ky = H ? nH / H : 1;
+      W = nW; H = nH;
+      const n = items.length;
+      for (let i = 0; i < n; i++) { baseX[i] *= kx; baseY[i] *= ky; }
+      if (mode === 'css' || mode === 'waapi') {
+        for (let i = 0; i < n; i++) {
+          const s = items[i].style;
+          s.left = (baseX[i] - half).toFixed(1) + 'px';
+          s.top = (baseY[i] - half).toFixed(1) + 'px';
+        }
+      }
+      if (mode === 'csspos' || mode === 'cssmargin') {
+        for (let i = 0; i < n; i++) {
+          const s = items[i].style, x = (baseX[i] - half).toFixed(1), y = (baseY[i] - half).toFixed(1);
+          s.setProperty('--x', x);
+          s.setProperty('--y', y);
+          if (mode === 'csspos') { s.left = x + 'px'; s.top = y + 'px'; }
+          else { s.marginLeft = x + 'px'; s.marginTop = y + 'px'; }
+        }
+      }
+    }).observe(stage);
+
+    setCount(+countInput.value || 1);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+
+</html>
