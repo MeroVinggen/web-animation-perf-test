@@ -1,4 +1,4 @@
-<p style="text-align:center;">
+<p align="center">
 <img src="./github/readme-rec2.webp" style="border-radius: 20px;">
 </p>
 
