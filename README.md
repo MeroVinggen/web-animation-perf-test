@@ -1,4 +1,6 @@
-<img src="./github/readme-rec1.webp" style="border-radius: 20px">
+<p style="text-align:center;">
+<img src="./github/readme-rec2.webp" style="border-radius: 20px;">
+</p>
 
 # Animation perf test
 
